@@ -87,6 +87,6 @@ Plain HTML/CSS/JS, no build step, no dependencies:
 - `js/app.js` — routing, library, editor
 - `sw.js` + `manifest.webmanifest` — installable-app (PWA) support
 
-Backdrop photo: ["Golden Retriever English cream portrait"](https://commons.wikimedia.org/wiki/File:Golden_Retriever_English_cream_portrait.jpg)
-(Wikimedia Commons, CC BY-SA 2.0). Swap it by replacing `assets/backdrop.jpg`
-with any image you like.
+The fluted-glass backdrop is pure CSS (`body::before` in `css/style.css`) —
+tweak the two radial-gradient glows there to change its colors, or set a
+`background-image` on it to use a photo instead.

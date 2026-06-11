@@ -28,20 +28,35 @@ html { background: var(--ui-bg); }
 /* body must stay transparent or it paints over the fixed backdrop layers */
 body { background: transparent; }
 
-/* the dog backdrop, dimmed so glass panels and text stay readable */
+/* abstract fluted-glass backdrop: orange + blue glows behind vertical ribs */
 body::before {
   content: '';
   position: fixed;
   inset: 0;
   z-index: -2;
-  background: url('../assets/backdrop.jpg') center / cover no-repeat;
+  background:
+    /* fine glass ribs */
+    repeating-linear-gradient(90deg,
+      rgba(255, 255, 255, 0.14) 0px,
+      rgba(255, 255, 255, 0.03) 3px,
+      rgba(0, 0, 0, 0.38) 9px,
+      rgba(255, 255, 255, 0.05) 16px,
+      rgba(0, 0, 0, 0.30) 22px),
+    /* warm glow, left */
+    radial-gradient(45% 70% at 20% 45%,
+      rgba(255, 110, 30, 0.95) 0%, rgba(255, 70, 0, 0.35) 45%, transparent 72%),
+    /* cool glow, right */
+    radial-gradient(55% 75% at 68% 42%,
+      rgba(40, 140, 255, 0.95) 0%, rgba(0, 90, 220, 0.35) 48%, transparent 75%),
+    radial-gradient(40% 55% at 88% 70%, rgba(80, 170, 255, 0.5) 0%, transparent 70%),
+    #04060a;
 }
 body::after {
   content: '';
   position: fixed;
   inset: 0;
   z-index: -1;
-  background: linear-gradient(180deg, rgba(8, 9, 13, 0.5), rgba(8, 9, 13, 0.78));
+  background: linear-gradient(180deg, rgba(4, 6, 10, 0.18), rgba(4, 6, 10, 0.5));
 }
 
 button { font: inherit; cursor: pointer; }
