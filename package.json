@@ -1,0 +1,10 @@
+{
+  "name": "teleprompt-pro",
+  "version": "1.0.0",
+  "description": "A voice-following teleprompter web app",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "start": "python3 server.py 8347"
+  }
+}

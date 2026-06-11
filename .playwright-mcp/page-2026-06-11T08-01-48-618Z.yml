@@ -1,0 +1,101 @@
+- generic [ref=e17]:
+  - generic [ref=e19]:
+    - paragraph [ref=e20]: Welcome to Teleprompt Pro, your voice-powered teleprompter.
+    - paragraph [ref=e21]
+    - paragraph [ref=e22]: Just start reading this script out loud, and watch the text scroll along with you. There is no need to set a speed or touch anything while you present.
+    - paragraph [ref=e23]
+    - paragraph [ref=e24]: If you skip a sentence, improvise for a moment, or stumble over a few words, don't worry. The prompter waits for you, and the moment you return to the script, it picks up right where you are and keeps going.
+    - paragraph [ref=e25]
+    - paragraph [ref=e26]: You can adjust the font size, colors, and margins from the settings panel, switch to a classic auto-scroll mode, or nudge the position with the arrow keys at any time.
+    - paragraph [ref=e27]
+    - paragraph [ref=e28]: When you are ready, create your own script from the library, press present, and enjoy hands-free reading. Good luck with your recording!
+  - generic [ref=e29]:
+    - generic [ref=e30]:
+      - button "← Exit" [ref=e31] [cursor=pointer]
+      - generic [ref=e32]: "Demo: try me first"
+    - generic [ref=e33]:
+      - generic [ref=e34]:
+        - button "🎙 Voice" [ref=e35] [cursor=pointer]
+        - button "▶ Auto" [ref=e36] [cursor=pointer]
+      - button "Start" [ref=e37] [cursor=pointer]
+      - button "⟲" [ref=e38] [cursor=pointer]
+      - button "⛶" [ref=e39] [cursor=pointer]
+      - button "⚙" [ref=e40] [cursor=pointer]
+  - generic [ref=e41]:
+    - generic [ref=e43]: Ready
+    - generic [ref=e44]:
+      - generic "Elapsed" [ref=e45]: 0:00
+      - generic "Estimated remaining"
+  - complementary [ref=e47]:
+    - generic [ref=e48]:
+      - heading "Settings" [level=2] [ref=e49]
+      - button "✕" [ref=e50] [cursor=pointer]
+    - generic [ref=e51]:
+      - text: Font size
+      - status "Font size px" [ref=e52]: "52"
+      - text: px
+      - slider [ref=e53]: "52"
+    - generic [ref=e54]:
+      - text: Line spacing
+      - status "Line spacing" [ref=e55]: "1.6"
+      - slider [ref=e56]: "1.6"
+    - generic [ref=e57]:
+      - text: Side margins
+      - status "Side margins %" [ref=e58]: "12"
+      - text: "%"
+      - slider [ref=e59]: "12"
+    - generic [ref=e60]:
+      - text: Eye-line position
+      - status "Eye-line position %" [ref=e61]: "35"
+      - text: "%"
+      - slider [ref=e62]: "35"
+    - separator [ref=e63]
+    - generic [ref=e64]:
+      - text: Language
+      - combobox "Language" [ref=e65]:
+        - option "English (US)" [selected]
+        - option "English (UK)"
+        - option "English (South Africa)"
+        - option "English (Australia)"
+        - option "Afrikaans"
+        - option "Dutch"
+        - option "French"
+        - option "German"
+        - option "Spanish (Spain)"
+        - option "Spanish (Mexico)"
+        - option "Portuguese (Brazil)"
+        - option "Italian"
+    - generic [ref=e66]:
+      - text: Countdown
+      - status "Countdown s" [ref=e67]: "3"
+      - text: s
+      - slider [ref=e68]: "3"
+    - generic [ref=e69]:
+      - text: Auto-scroll speed
+      - status "Auto-scroll speed px/s" [ref=e70]: "55"
+      - text: px/s
+      - slider [ref=e71]: "55"
+    - separator [ref=e72]
+    - generic [ref=e73]:
+      - generic [ref=e74]:
+        - text: Text
+        - textbox "Text" [ref=e75]: "#f4f2ec"
+      - generic [ref=e76]:
+        - text: Background
+        - textbox "Background" [ref=e77]: "#0a0a0c"
+      - generic [ref=e78]:
+        - text: Highlight
+        - textbox "Highlight" [ref=e79]: "#ffd166"
+    - generic [ref=e80]:
+      - checkbox "Mirror text (beam-splitter rig)" [ref=e81]
+      - text: Mirror text (beam-splitter rig)
+    - generic [ref=e82]:
+      - checkbox "Show recognized words" [checked] [ref=e83]
+      - text: Show recognized words
+    - separator [ref=e84]
+    - generic [ref=e85]:
+      - heading "Keyboard shortcuts" [level=3] [ref=e86]
+      - paragraph [ref=e87]:
+        - text: Space start / pause · ↑↓ nudge · +− font size
+        - text: M voice/auto · F fullscreen · R restart · Esc exit
+        - text: Click any word to jump there.

@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Teleprompt Pro</title>
+  <meta name="theme-color" content="#0c0d10" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="icon" href="assets/icon-192.png" />
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Teleprompt" />
+</head>
+<body>
+
+  <!-- ===== Library ===== -->
+  <section id="view-library" hidden>
+    <header class="app-header">
+      <div>
+        <h1>🎙️ Teleprompt Pro</h1>
+        <p class="tagline">A teleprompter that follows your voice</p>
+      </div>
+      <button id="btn-new-script" class="btn primary">+ New script</button>
+    </header>
+    <div id="library-empty" class="empty-state" hidden>
+      <p>No scripts yet. Create your first one to get started.</p>
+    </div>
+    <div id="script-list" class="card-grid"></div>
+  </section>
+
+  <!-- ===== Editor ===== -->
+  <section id="view-editor" hidden>
+    <header class="editor-header">
+      <button id="btn-editor-back" class="btn">← Library</button>
+      <input id="editor-title" type="text" placeholder="Script title…" autocomplete="off" />
+      <span id="editor-stats" class="meta"></span>
+      <button id="btn-editor-present" class="btn primary">▶ Present</button>
+    </header>
+    <textarea id="editor-text" placeholder="Paste or type your script here…&#10;&#10;Blank lines create paragraph breaks." spellcheck="true"></textarea>
+    <p class="editor-hint">Saved automatically as you type.</p>
+  </section>
+
+  <!-- ===== Prompter ===== -->
+  <section id="view-prompter" hidden>
+    <div id="prompter-scroll">
+      <div id="prompter-content"></div>
+    </div>
+    <div class="eye-line" aria-hidden="true"></div>
+
+    <div id="prompter-topbar" class="chrome">
+      <div class="bar-group">
+        <button id="btn-back" class="btn ghost">← Exit</button>
+        <span id="prompter-title"></span>
+      </div>
+      <div class="bar-group">
+        <button id="btn-font-down" class="btn ghost font-btn" title="Smaller text (−)">A−</button>
+        <button id="btn-font-up" class="btn ghost font-btn" title="Bigger text (+)">A+</button>
+        <div class="mode-switch">
+          <button data-mode="voice" class="btn ghost">🎙 Voice</button>
+          <button data-mode="auto" class="btn ghost">▶ Auto</button>
+        </div>
+        <button id="btn-start" class="btn primary">Start</button>
+        <button id="btn-restart" class="btn ghost" title="Restart from top (R)">⟲</button>
+        <button id="btn-fullscreen" class="btn ghost" title="Fullscreen (F)">⛶</button>
+        <button id="btn-settings" class="btn ghost" title="Settings">⚙</button>
+      </div>
+    </div>
+
+    <div id="prompter-bottombar" class="chrome">
+      <div class="bar-group">
+        <span id="status-pill" data-state="idle">Ready</span>
+        <span id="heard-words"></span>
+      </div>
+      <div class="bar-group">
+        <span id="timer-elapsed" title="Elapsed">0:00</span>
+        <span id="timer-remaining" title="Estimated remaining"></span>
+      </div>
+    </div>
+    <div id="progress-track"><div id="progress-fill"></div></div>
+
+    <div id="countdown-overlay"></div>
+
+    <aside id="settings-drawer">
+      <div class="drawer-header">
+        <h2>Settings</h2>
+        <button id="btn-drawer-close" class="btn ghost">✕</button>
+      </div>
+
+      <label>Font size <output id="set-font-val"></output>px
+        <input id="set-font" type="range" min="24" max="120" step="2" />
+      </label>
+      <label>Line spacing <output id="set-lineheight-val"></output>
+        <input id="set-lineheight" type="range" min="1.2" max="2.4" step="0.1" />
+      </label>
+      <label>Side margins <output id="set-margin-val"></output>%
+        <input id="set-margin" type="range" min="0" max="30" step="1" />
+      </label>
+      <label>Eye-line position <output id="set-eyeline-val"></output>%
+        <input id="set-eyeline" type="range" min="10" max="70" step="5" />
+      </label>
+      <div class="setting-row">
+        <span class="setting-label">Text alignment</span>
+        <div class="seg" id="set-align">
+          <button data-align="left" type="button">Left</button>
+          <button data-align="center" type="button">Center</button>
+          <button data-align="right" type="button">Right</button>
+        </div>
+      </div>
+
+      <hr />
+
+      <label>Language
+        <select id="set-lang"></select>
+      </label>
+      <label>Countdown <output id="set-countdown-val"></output>s
+        <input id="set-countdown" type="range" min="0" max="10" step="1" />
+      </label>
+      <label>Auto-scroll speed <output id="set-speed-val"></output> px/s
+        <input id="set-speed" type="range" min="10" max="200" step="5" />
+      </label>
+
+      <hr />
+
+      <div class="color-row">
+        <label class="color">Text <input id="set-text-color" type="color" /></label>
+        <label class="color">Background <input id="set-bg-color" type="color" /></label>
+        <label class="color">Highlight <input id="set-highlight-color" type="color" /></label>
+      </div>
+
+      <label class="check"><input id="set-mirror" type="checkbox" /> Mirror text (beam-splitter rig)</label>
+      <label class="check"><input id="set-heard" type="checkbox" /> Show recognized words</label>
+
+      <hr />
+      <div class="shortcuts">
+        <h3>Keyboard shortcuts</h3>
+        <p><kbd>Space</kbd> start / pause · <kbd>↑</kbd><kbd>↓</kbd> nudge · <kbd>+</kbd><kbd>−</kbd> font size<br/>
+        <kbd>M</kbd> voice/auto · <kbd>F</kbd> fullscreen · <kbd>R</kbd> restart · <kbd>S</kbd> settings · <kbd>Esc</kbd> exit<br/>
+        Click any word to jump there.</p>
+      </div>
+    </aside>
+  </section>
+
+  <div id="toast"></div>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
