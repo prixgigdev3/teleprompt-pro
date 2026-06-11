@@ -4,6 +4,8 @@ A teleprompter that **follows your voice**. Add a script, press Start, and read 
 the text scrolls along with you. If you stumble, skip a sentence, or improvise
 for a moment, the prompter waits and picks up the instant you return to the script.
 
+**Live app:** https://prixgigdev3.github.io/teleprompt-pro/
+
 ## How to launch
 
 **Double-click `Start Teleprompt Pro.command`** in this folder.
@@ -50,10 +52,11 @@ Teleprompt Pro is a PWA — it installs like a real app, no app store needed:
 - **Mac (Chrome):** with the app open, click the **install icon** at the right
   end of the address bar (or ⋮ menu → *Cast, save and share* → *Install page as
   app*). It gets its own Dock icon and window.
-- **iPhone / iPad:** the app must be reachable from the device, which means
-  hosting it on a free HTTPS host (Netlify / Vercel / GitHub Pages — ask
-  Claude to deploy it). Then open it in Safari → Share → **Add to Home
-  Screen**. It launches full-screen with the app icon.
+- **iPhone / iPad:** open https://prixgigdev3.github.io/teleprompt-pro/ in
+  Safari → Share → **Add to Home Screen**. It launches full-screen with the
+  app icon. (If voice mode won't start inside the installed app on older iOS
+  versions, use it directly in Safari — Apple restricts speech recognition in
+  home-screen apps on some versions. Auto-scroll mode always works.)
 
 ## Good to know
 
