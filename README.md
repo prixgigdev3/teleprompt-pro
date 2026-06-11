@@ -68,8 +68,11 @@ Teleprompt Pro is a PWA — it installs like a real app, no app store needed:
   its search and re-locks the moment you read a full phrase from the script.
 - **Auto mode** is a classic constant-speed teleprompter as a fallback —
   adjust speed in settings.
-- Scripts are stored in the browser's local storage on this Mac. To back one
-  up, copy the text out of the editor.
+- **Privacy:** scripts are stored in the browser's local storage on the device
+  where you typed them — they are never uploaded anywhere. Anyone else opening
+  the app URL gets their own fresh, empty copy and can never see your scripts.
+  (This also means scripts don't sync between your own devices.) To back a
+  script up, copy the text out of the editor.
 
 ## Development
 
