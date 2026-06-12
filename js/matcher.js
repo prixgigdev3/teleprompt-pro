@@ -120,8 +120,24 @@ export class ScriptMatcher {
     // function-word hits ("you", "the", "and") must not anchor the position.
     // While lost (widened search), never accept fewer than 4 matches — a 1-2
     // word interim fragment must not teleport the position across the script.
-    const needed = Math.max(widen > 0 ? 4 : 1, Math.ceil(tail.length * 0.6));
-    const minMatched = widen > 0 ? needed : Math.min(tail.length, needed);
+    let needed = Math.max(widen > 0 ? 4 : 1, Math.ceil(tail.length * 0.6));
+    // Short tails may move with less evidence only in the benign case:
+    // on-script, normal window. Off-script or far moves get no such discount.
+    if (widen === 0 && this.missStreak < 2) {
+      needed = Math.min(tail.length, needed);
+    }
+    if (best) {
+      // The further the move, the more evidence it takes. This keeps a
+      // speaker who is riffing off-script from being dragged forward by
+      // chance hits on common words.
+      const jump = best.end - this.position;
+      if (jump > 8) needed = Math.max(needed, 3);
+      if (jump > 20) needed = Math.max(needed, 4);
+      if (jump > 40) needed = Math.max(needed, 5);
+      // Recently off-script: any movement at all needs a solid phrase.
+      if (this.missStreak >= 2) needed = Math.max(needed, 3);
+    }
+    const minMatched = needed;
     const accepted =
       best &&
       best.score > 0 &&
@@ -133,13 +149,13 @@ export class ScriptMatcher {
 
     if (!accepted) {
       this.missStreak++;
-      return { position: this.position, moved: false, matched: 0 };
+      return { position: this.position, moved: false, matched: 0, lost: this.missStreak >= 3 };
     }
 
     this.missStreak = 0;
     const moved = best.end !== this.position;
     this.position = best.end;
-    return { position: this.position, moved, matched: best.matched };
+    return { position: this.position, moved, matched: best.matched, lost: false };
   }
 
   // Semi-global alignment: all of `tail` against any substring of

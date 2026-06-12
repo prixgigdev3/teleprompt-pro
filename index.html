@@ -62,8 +62,10 @@
           <button data-mode="voice" class="btn ghost">🎙 Voice</button>
           <button data-mode="auto" class="btn ghost">▶ Auto</button>
         </div>
+        <button id="btn-retake" class="btn ghost" title="Retake — jump back a sentence (B)">↩ Retake</button>
         <button id="btn-start" class="btn primary">Start</button>
         <button id="btn-restart" class="btn ghost" title="Restart from top (R)">⟲</button>
+        <button id="btn-report" class="btn ghost" title="Session report" hidden>📊</button>
         <button id="btn-fullscreen" class="btn ghost" title="Fullscreen (F)">⛶</button>
         <button id="btn-settings" class="btn ghost" title="Settings">⚙</button>
       </div>
@@ -101,6 +103,9 @@
       <label>Eye-line position <output id="set-eyeline-val"></output>%
         <input id="set-eyeline" type="range" min="10" max="70" step="5" />
       </label>
+      <label>Read-word visibility <output id="set-readmix-val"></output>%
+        <input id="set-readmix" type="range" min="15" max="100" step="5" />
+      </label>
       <div class="setting-row">
         <span class="setting-label">Text alignment</span>
         <div class="seg" id="set-align">
@@ -136,11 +141,24 @@
       <hr />
       <div class="shortcuts">
         <h3>Keyboard shortcuts</h3>
-        <p><kbd>Space</kbd> start / pause · <kbd>↑</kbd><kbd>↓</kbd> nudge · <kbd>+</kbd><kbd>−</kbd> font size<br/>
-        <kbd>M</kbd> voice/auto · <kbd>F</kbd> fullscreen · <kbd>R</kbd> restart · <kbd>S</kbd> settings · <kbd>Esc</kbd> exit<br/>
+        <p><kbd>Space</kbd> start / pause · <kbd>B</kbd> retake sentence · <kbd>↑</kbd><kbd>↓</kbd> nudge<br/>
+        <kbd>+</kbd><kbd>−</kbd> font size · <kbd>M</kbd> voice/auto · <kbd>F</kbd> fullscreen · <kbd>R</kbd> restart · <kbd>S</kbd> settings · <kbd>Esc</kbd> exit<br/>
         Click any word to jump there.</p>
       </div>
     </aside>
+  </section>
+
+  <!-- ===== Session reports ===== -->
+  <section id="view-report" hidden>
+    <header class="report-header">
+      <button id="btn-report-back" class="btn">← Back</button>
+      <div id="report-title-wrap">
+        <h1 id="report-title"></h1>
+        <p id="report-subtitle" class="meta"></p>
+      </div>
+      <button id="btn-copy-coach" class="btn primary">✦ Copy AI coaching prompt</button>
+    </header>
+    <div id="report-body"></div>
   </section>
 
   <div id="toast"></div>

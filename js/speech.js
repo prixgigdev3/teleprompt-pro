@@ -6,9 +6,12 @@
 // session resets are harmless.
 
 export class SpeechEngine {
-  constructor({ lang = 'en-US', onWords, onState, onError } = {}) {
+  constructor({ lang = 'en-US', onWords, onFinalWords, onState, onError } = {}) {
     this.lang = lang;
     this.onWords = onWords || (() => {});
+    // Called with only the NEWLY-finalized words of the current session —
+    // suitable for building a running transcript (session analytics).
+    this.onFinalWords = onFinalWords || (() => {});
     this.onState = onState || (() => {});
     this.onError = onError || (() => {});
     this.active = false;
@@ -79,14 +82,24 @@ export class SpeechEngine {
       this.onState('listening');
     };
 
+    let reportedFinals = 0; // per-session: how many final words already emitted
     rec.onresult = (event) => {
       this._recentRestarts = 0;
       const words = [];
+      const finals = [];
       for (let i = 0; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript.trim();
-        if (transcript) words.push(...transcript.split(/\s+/));
+        if (!transcript) continue;
+        const parts = transcript.split(/\s+/);
+        words.push(...parts);
+        if (event.results[i].isFinal) finals.push(...parts);
       }
       if (words.length) this.onWords(words);
+      if (finals.length > reportedFinals) {
+        const fresh = finals.slice(reportedFinals);
+        reportedFinals = finals.length;
+        this.onFinalWords(fresh);
+      }
     };
 
     rec.onerror = (event) => {

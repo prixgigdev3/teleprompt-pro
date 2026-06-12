@@ -29,6 +29,7 @@ press Start, Chrome will ask for microphone access — click **Allow**.
 | `Space` | Start / pause |
 | `↑` / `↓` | Nudge position back / forward |
 | `+` / `−` | Font size |
+| `B` / `Backspace` | ↩ Retake — jump back a sentence and re-read |
 | `M` | Switch voice ↔ auto-scroll mode |
 | `F` | Fullscreen |
 | `R` | Restart from the top |
@@ -57,6 +58,28 @@ Teleprompt Pro is a PWA — it installs like a real app, no app store needed:
   app icon. (If voice mode won't start inside the installed app on older iOS
   versions, use it directly in Safari — Apple restricts speech recognition in
   home-screen apps on some versions. Auto-scroll mode always works.)
+
+## Session reports 📊
+
+Read in voice mode for a minute or more and the session is recorded (locally,
+like everything else). Press **📊** in the prompter when you finish — or the
+**📊 n** button on the script's library card — to see:
+
+- your longest **pauses**, with the exact script line you stopped at
+- **fumble hotspots** — where you rewound or retook lines
+- **words you lean on** (fillers and crutch words vs. what the script asks for)
+- **skipped passages** the prompter never heard you read
+- **pace minute-by-minute** and overall stats
+
+**✦ Copy AI coaching prompt** bundles your script, the transcript of what you
+actually said, and the stats into one prompt — paste it into Claude for the
+qualitative layer: which sentences don't work out loud, why the fumbles
+happened, and what to change in the next take.
+
+While presenting, going off-script flips the status pill to **“Off-script —
+waiting”**; the prompter holds position until you speak a solid phrase from
+the script again, then re-locks. The scroll speed also adapts to your reading
+pace — faster when you speed up, gentler when you slow down.
 
 ## Good to know
 

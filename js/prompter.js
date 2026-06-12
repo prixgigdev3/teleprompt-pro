@@ -3,7 +3,7 @@
 
 import { parseScript, ScriptMatcher } from './matcher.js';
 import { SpeechEngine } from './speech.js';
-import { saveSettings, LANGUAGES } from './store.js';
+import { saveSettings, saveSession, LANGUAGES } from './store.js';
 
 const NUDGE_WORDS = 6;
 
@@ -49,13 +49,25 @@ export class Prompter {
 
     const { paragraphs, tokens } = parseScript(script.text);
     this.tokens = tokens;
+    this.sentenceStarts = computeSentenceStarts(paragraphs);
     this.matcher = new ScriptMatcher(tokens);
     this.engine = new SpeechEngine({
       lang: this.settings.lang,
       onWords: (words) => this.onWords(words),
+      onFinalWords: (words) => this.onFinalWords(words),
       onState: (s) => this.onEngineState(s),
       onError: (e) => this.onEngineError(e),
     });
+
+    // Session recorder + adaptive-scroll state.
+    this.rec = null;
+    this.lastSessionId = null;
+    this.isLost = false;
+    this.scrollRate = 80;   // px/s, learned from the reader's pace
+    this.snapNext = false;  // skip the speed cap right after a manual jump
+    this.lastMoveT = 0;
+    this.lastMoveTarget = 0;
+    this.$('#btn-report').hidden = true;
 
     this.titleEl.textContent = script.title || 'Untitled script';
     this.renderScript(paragraphs);
@@ -93,6 +105,7 @@ export class Prompter {
   }
 
   close() {
+    this.recSave();
     this.abortCountdown();
     if (this.engine) this.engine.stop();
     cancelAnimationFrame(this.rafId);
@@ -146,7 +159,8 @@ export class Prompter {
     st.setProperty('--tp-align', s.align || 'left');
     st.setProperty('--tp-text', s.textColor);
     st.setProperty('--tp-bg', s.bgColor);
-    st.setProperty('--tp-read', s.readColor);
+    const mix = s.readMix ?? 55;
+    st.setProperty('--tp-read', `color-mix(in srgb, ${s.textColor} ${mix}%, ${s.bgColor})`);
     st.setProperty('--tp-highlight', s.highlightColor);
     this.scrollEl.classList.toggle('mirrored', !!s.mirror);
     this.heardEl.style.display = s.showHeard ? '' : 'none';
@@ -190,6 +204,68 @@ export class Prompter {
     this.progressEl.style.width = pct + '%';
   }
 
+  // ---------- session recorder ----------
+
+  recStart() {
+    this.rec = {
+      id: 'r_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+      scriptId: this.script.id,
+      scriptTitle: this.script.title || 'Untitled script',
+      scriptText: this.script.text,
+      startedAt: Date.now(),
+      t0: performance.now(),
+      heard: [],     // {t, w} newly-finalized words per recognition event
+      activity: [],  // timestamps of any recognition activity (pause detection)
+      trace: [],     // {t, pos} accepted position moves
+      marks: [],     // {t, type, ...} retakes, jumps, lost/relock, pause/resume
+      saved: false,
+    };
+  }
+
+  recT() {
+    return Math.round(performance.now() - this.rec.t0);
+  }
+
+  recMark(type, extra = {}) {
+    if (this.rec && !this.rec.saved) this.rec.marks.push({ t: this.recT(), type, ...extra });
+  }
+
+  // Persist the session if it represents a real take (>60s of voice reading).
+  recSave() {
+    const rec = this.rec;
+    if (!rec || rec.saved) return;
+    const elapsed = (performance.now() - rec.t0) / 1000;
+    if (elapsed < 60 || rec.trace.length < 5) return;
+    rec.saved = true;
+    const session = {
+      id: rec.id,
+      scriptId: rec.scriptId,
+      scriptTitle: rec.scriptTitle,
+      scriptText: rec.scriptText,
+      startedAt: rec.startedAt,
+      elapsedSec: Math.round(elapsed),
+      tokensTotal: this.tokens.length,
+      finalPos: this.renderedPos,
+      words: rec.heard.reduce((n, h) => n + h.w.split(/\s+/).length, 0),
+      heard: rec.heard,
+      activity: rec.activity,
+      trace: rec.trace,
+      marks: rec.marks,
+    };
+    if (saveSession(session)) {
+      this.lastSessionId = session.id;
+      const btn = this.$('#btn-report');
+      btn.hidden = false;
+      this.toast('Session saved — press 📊 Report for your delivery analysis.', 5000);
+    }
+  }
+
+  onFinalWords(words) {
+    if (this.rec && !this.rec.saved && this.state === 'running') {
+      this.rec.heard.push({ t: this.recT(), w: words.join(' ') });
+    }
+  }
+
   // ---------- animation ----------
 
   frame(t) {
@@ -206,7 +282,17 @@ export class Prompter {
         const cur = this.scrollEl.scrollTop;
         const diff = this.scrollTarget - cur;
         if (Math.abs(diff) > 0.5) {
-          this.scrollEl.scrollTop = cur + diff * Math.min(1, dt * 3.5);
+          // Proportional catch-up, capped to the reader's measured pace so a
+          // burst of matched words glides instead of skipping. Manual jumps
+          // (snapNext) bypass the cap once.
+          const cap = this.snapNext
+            ? 5000
+            : Math.min(900, Math.max(50, this.scrollRate * 2.5));
+          let v = diff * 3;
+          if (v > cap) v = cap;
+          else if (v < -cap) v = -cap;
+          this.scrollEl.scrollTop = cur + v * dt;
+          if (this.snapNext && Math.abs(diff) < 24) this.snapNext = false;
         }
       }
     }
@@ -243,8 +329,13 @@ export class Prompter {
     this.state = 'running';
     this.startedAt = performance.now();
     if (fresh) this.elapsedBase = 0;
-    if (this.mode === 'voice') this.engine.start();
-    else this.setStatus('auto');
+    if (this.mode === 'voice') {
+      if (fresh || !this.rec || this.rec.saved) this.recStart();
+      else this.recMark('resume');
+      this.engine.start();
+    } else {
+      this.setStatus('auto');
+    }
     this.updateStartBtn();
     this.wakeChrome();
   }
@@ -255,6 +346,7 @@ export class Prompter {
     this.startedAt = null;
     this.state = 'paused';
     this.engine.stop();
+    this.recMark('pause');
     // Pause gaps would deflate the rolling WPM; start the estimate fresh.
     this.paceLog = [];
     this.remainEl.textContent = '';
@@ -263,8 +355,12 @@ export class Prompter {
   }
 
   restart() {
+    this.recSave(); // a restart ends the current take; keep its data
+    this.rec = null;
     this.abortCountdown();
     this.engine.stop();
+    this.isLost = false;
+    this.lastMoveT = 0;
     this.state = 'idle';
     this.elapsedBase = 0;
     this.startedAt = null;
@@ -287,6 +383,8 @@ export class Prompter {
     }
     this.state = 'done';
     this.engine.stop();
+    this.recMark('finish');
+    this.recSave();
     this.setStatus('done');
     this.updateStartBtn();
   }
@@ -332,18 +430,51 @@ export class Prompter {
     if (this.settings.showHeard) {
       this.heardEl.textContent = words.slice(-7).join(' ');
     }
+    const now = performance.now();
+    if (this.rec && !this.rec.saved) {
+      const t = this.recT();
+      const acts = this.rec.activity;
+      if (!acts.length || t - acts[acts.length - 1] >= 400) acts.push(t);
+    }
+
     const res = this.matcher.feed(words);
+
+    // Off-script sensing: after a few unmatched feeds the prompter visibly
+    // waits; the moment a solid phrase matches again it re-locks.
+    if (res.lost && !this.isLost) {
+      this.isLost = true;
+      this.setStatus('waiting');
+      this.recMark('lost');
+    } else if (!res.lost && this.isLost && res.moved) {
+      this.isLost = false;
+      this.setStatus('listening');
+      this.recMark('relock');
+    }
+
     if (res.moved) {
+      // Learn the reader's scroll pace (px/s) from voice-driven moves only.
+      const prevTarget = this.scrollTarget;
       this.setPosition(res.position);
-      this.paceLog.push({ t: performance.now(), pos: res.position });
+      if (this.lastMoveT) {
+        const dtm = (now - this.lastMoveT) / 1000;
+        const dpx = this.scrollTarget - this.lastMoveTarget;
+        if (dtm > 0.05 && dtm < 5 && dpx > 0) {
+          this.scrollRate = 0.75 * this.scrollRate + 0.25 * Math.min(1200, dpx / dtm);
+        }
+      }
+      this.lastMoveT = now;
+      this.lastMoveTarget = this.scrollTarget;
+
+      this.paceLog.push({ t: now, pos: res.position });
+      if (this.rec && !this.rec.saved) this.rec.trace.push({ t: this.recT(), pos: res.position });
       if (res.position >= this.tokens.length - 1) this.finish();
     }
   }
 
   onEngineState(s) {
     if (this.state !== 'running' || this.mode !== 'voice') return;
-    if (s === 'listening') this.setStatus('listening');
-    // 'restarting' blips are routine; keep showing the listening pill.
+    // Engine restarts are routine; don't flip an off-script "waiting" pill.
+    if (s === 'listening') this.setStatus(this.isLost ? 'waiting' : 'listening');
   }
 
   onEngineError(err) {
@@ -371,6 +502,7 @@ export class Prompter {
     const labels = {
       idle: 'Ready',
       listening: 'Listening',
+      waiting: 'Off-script — waiting',
       paused: 'Paused',
       auto: 'Auto-scroll',
       done: 'Finished',
@@ -415,6 +547,10 @@ export class Prompter {
     this.$('#btn-back').addEventListener('click', () => this.onExit());
     this.$('#btn-font-down').addEventListener('click', () => this.adjustFont(-4));
     this.$('#btn-font-up').addEventListener('click', () => this.adjustFont(4));
+    this.$('#btn-retake').addEventListener('click', () => this.retake());
+    this.$('#btn-report').addEventListener('click', () => {
+      if (this.lastSessionId) location.hash = '#/report/' + this.lastSessionId;
+    });
     this.startBtn.addEventListener('click', () => this.toggleStart());
     this.$('#btn-restart').addEventListener('click', () => this.restart());
     this.$('#btn-fullscreen').addEventListener('click', () => this.toggleFullscreen());
@@ -442,12 +578,41 @@ export class Prompter {
   // Move the reading position by user action (click, nudge, mode re-anchor).
   // The live recognizer's transcript still ends at the OLD position, so flush
   // it — otherwise the next result event re-anchors right back.
-  manualJump(pos) {
+  manualJump(pos, markType = 'jump') {
+    const from = this.renderedPos;
     this.matcher.reset(pos);
     this.setPosition(pos);
     this.paceLog = [];
     this.remainEl.textContent = '';
+    this.snapNext = true;   // jump the scroll there at full speed
+    this.lastMoveT = 0;     // don't let the jump poison the pace estimate
+    this.isLost = false;
+    if (this.state === 'running' && this.mode === 'voice') this.setStatus('listening');
+    this.recMark(markType, { from, to: pos });
     this.engine.flush();
+  }
+
+  // Jump back to the start of the current sentence (or the previous one when
+  // already at a sentence start) so a line can be re-taken cleanly.
+  retake() {
+    if (!this.tokens.length) return;
+    const pos = Math.max(0, this.renderedPos);
+    let starts = this.sentenceStarts;
+    let s = 0;
+    for (const idx of starts) {
+      if (idx <= pos) s = idx;
+      else break;
+    }
+    if (pos - s < 3) {
+      // Already at the top of this sentence — go one sentence further back.
+      let prev = 0;
+      for (const idx of starts) {
+        if (idx < s) prev = idx;
+        else break;
+      }
+      s = prev;
+    }
+    this.manualJump(s - 1, 'retake');
   }
 
   adjustFont(delta) {
@@ -552,6 +717,12 @@ export class Prompter {
       case 'S':
         this.drawer.classList.toggle('open');
         break;
+      case 'b':
+      case 'B':
+      case 'Backspace':
+        e.preventDefault();
+        this.retake();
+        break;
       case 'Escape':
         if (this.drawer.classList.contains('open')) this.drawer.classList.remove('open');
         else if (!document.fullscreenElement) this.onExit();
@@ -609,6 +780,7 @@ export class Prompter {
     bind('#set-lineheight', 'lineHeight');
     bind('#set-margin', 'marginPct');
     bind('#set-eyeline', 'eyeLinePct');
+    bind('#set-readmix', 'readMix');
     bind('#set-speed', 'autoSpeed');
     bind('#set-countdown', 'countdown');
     bind('#set-text-color', 'textColor', { numeric: false });
@@ -647,6 +819,7 @@ export class Prompter {
     setVal('#set-lineheight', s.lineHeight);
     setVal('#set-margin', s.marginPct);
     setVal('#set-eyeline', s.eyeLinePct);
+    setVal('#set-readmix', s.readMix ?? 55);
     setVal('#set-speed', s.autoSpeed);
     setVal('#set-countdown', s.countdown);
     setVal('#set-text-color', s.textColor);
@@ -657,6 +830,22 @@ export class Prompter {
     setVal('#set-heard', s.showHeard);
     this.syncAlignButtons();
   }
+}
+
+// Token indices that begin a sentence: first token overall, first token of a
+// paragraph, or any token following one whose raw text ends a sentence.
+function computeSentenceStarts(paragraphs) {
+  const starts = [];
+  let expectStart = true;
+  for (const words of paragraphs) {
+    if (words.length) expectStart = true; // paragraph break starts a sentence
+    for (const w of words) {
+      if (w.index < 0) continue;
+      if (expectStart) starts.push(w.index);
+      expectStart = /[.!?…]["')\]]*$/.test(w.raw);
+    }
+  }
+  return starts.length ? starts : [0];
 }
 
 export function fmtTime(seconds) {

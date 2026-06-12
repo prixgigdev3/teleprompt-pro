@@ -188,3 +188,41 @@ test('1-2 word fragments cannot teleport the position while lost (regression)', 
   assert.equal(matcher.position, anchored,
     'short function-word fragment moved the position during widened search');
 });
+
+test('riffing with common script words does not drag the position (regression)', () => {
+  const { matcher, tokens } = makeMatcher();
+  speak(matcher, tokens.slice(0, 12));
+  const anchored = matcher.position;
+  // Off-script riff arriving as short fresh-utterance fragments, full of
+  // common words that also appear in the script — but no verbatim phrases.
+  // These must not drag the prompter forward.
+  const riff = ['so', 'anyway', 'what', 'i', 'was', 'thinking', 'about', 'this', 'whole',
+    'process', 'like', 'when', 'we', 'did', 'that', 'shoot', 'last', 'week', 'you',
+    'know', 'the', 'one', 'with', 'the', 'lights', 'or', 'whatever'];
+  for (let i = 0; i < riff.length; i += 2) {
+    matcher.feed(riff.slice(i, i + 2));
+    matcher.feed(riff.slice(Math.max(0, i - 6), i + 2));
+  }
+  assert.ok(Math.abs(matcher.position - anchored) <= 8,
+    `riff dragged position from ${anchored} to ${matcher.position}`);
+  // Returning to the script re-locks within a phrase.
+  let pos = matcher.position;
+  const resume = tokens.slice(12, 24);
+  for (let i = 3; i <= resume.length; i += 3) {
+    pos = matcher.feed(resume.slice(0, i)).position;
+  }
+  assert.ok(pos >= 20, `expected re-lock >= 20 after riff, got ${pos}`);
+});
+
+test('feed reports lost state after repeated misses', () => {
+  const { matcher, tokens } = makeMatcher();
+  speak(matcher, tokens.slice(0, 12));
+  let res;
+  for (let i = 0; i < 4; i++) {
+    res = matcher.feed(['flurble', 'wuzzle', 'quibble', 'zonk']);
+  }
+  assert.equal(res.lost, true);
+  const back = matcher.feed(tokens.slice(12, 20));
+  assert.equal(back.lost, false);
+  assert.ok(back.moved);
+});

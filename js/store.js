@@ -11,7 +11,7 @@ export const DEFAULT_SETTINGS = {
   align: 'left',       // left | center | right
   textColor: '#f4f2ec',
   bgColor: '#0a0a0c',
-  readColor: '#5a5a60',
+  readMix: 55,         // % visibility of already-read words (vs background)
   highlightColor: '#ffd166',
   mirror: false,
   lang: 'en-US',
@@ -91,6 +91,38 @@ export function newScript(title = '', text = '') {
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
+}
+
+// ---------- recorded sessions (for the post-read analysis report) ----------
+
+const SESSIONS_KEY = 'tp_sessions_v1';
+const MAX_SESSIONS = 20;
+
+export function listSessions(scriptId = null) {
+  const sessions = read(SESSIONS_KEY, []);
+  const all = Array.isArray(sessions) ? sessions : [];
+  return scriptId === null ? all : all.filter((s) => s.scriptId === scriptId);
+}
+
+export function getSession(id) {
+  return listSessions().find((s) => s.id === id) || null;
+}
+
+export function saveSession(session) {
+  const sessions = listSessions();
+  sessions.unshift(session);
+  while (sessions.length > MAX_SESSIONS) sessions.pop();
+  if (write(SESSIONS_KEY, sessions)) return true;
+  // Storage is tight: drop the oldest sessions until the new one fits.
+  while (sessions.length > 1) {
+    sessions.pop();
+    if (write(SESSIONS_KEY, sessions)) return true;
+  }
+  return false;
+}
+
+export function deleteSession(id) {
+  return write(SESSIONS_KEY, listSessions().filter((s) => s.id !== id));
 }
 
 const SAMPLE_TEXT = `Welcome to Teleprompt Pro, your voice-powered teleprompter.

@@ -2,15 +2,17 @@
 
 import {
   ensureSampleScript, listScripts, getScript, saveScript, deleteScript,
-  newScript, loadSettings,
+  newScript, loadSettings, listSessions, getSession, deleteSession,
 } from './store.js';
 import { parseScript } from './matcher.js';
 import { Prompter, fmtTime } from './prompter.js';
+import { analyzeSession, buildCoachPrompt } from './analysis.js';
 
 const views = {
   library: document.getElementById('view-library'),
   editor: document.getElementById('view-editor'),
   prompter: document.getElementById('view-prompter'),
+  report: document.getElementById('view-report'),
 };
 
 const settings = loadSettings();
@@ -45,8 +47,18 @@ function route() {
 
   const present = hash.match(/^#\/present\/(.+)$/);
   const edit = hash.match(/^#\/edit\/(.+)$/);
+  const reportList = hash.match(/^#\/reports\/(.+)$/);
+  const reportOne = hash.match(/^#\/report\/(.+)$/);
 
-  if (present) {
+  if (reportList) {
+    showView('report');
+    renderSessionList(reportList[1]);
+  } else if (reportOne) {
+    const session = getSession(reportOne[1]);
+    if (!session) return navigate('#/');
+    showView('report');
+    renderReport(session);
+  } else if (present) {
     const script = getScript(present[1]);
     if (!script) return navigate('#/');
     showView('prompter');
@@ -126,6 +138,16 @@ function renderLibrary() {
     editBtn.textContent = 'Edit';
     editBtn.addEventListener('click', () => navigate('#/edit/' + script.id));
 
+    const sessionCount = listSessions(script.id).length;
+    let reportsBtn = null;
+    if (sessionCount > 0) {
+      reportsBtn = document.createElement('button');
+      reportsBtn.className = 'btn';
+      reportsBtn.textContent = `📊 ${sessionCount}`;
+      reportsBtn.title = 'Session reports';
+      reportsBtn.addEventListener('click', () => navigate('#/reports/' + script.id));
+    }
+
     const delBtn = document.createElement('button');
     delBtn.className = 'btn danger';
     delBtn.textContent = 'Delete';
@@ -138,7 +160,9 @@ function renderLibrary() {
       }
     });
 
-    actions.append(presentBtn, editBtn, delBtn);
+    actions.append(presentBtn, editBtn);
+    if (reportsBtn) actions.append(reportsBtn);
+    actions.append(delBtn);
     card.append(title, snippet, meta, actions);
     listEl.appendChild(card);
   }
@@ -152,6 +176,195 @@ document.getElementById('btn-new-script').addEventListener('click', () => {
   }
   navigate('#/edit/' + script.id);
 });
+
+// ---------- session reports ----------
+
+const reportTitle = document.getElementById('report-title');
+const reportSubtitle = document.getElementById('report-subtitle');
+const reportBody = document.getElementById('report-body');
+const copyCoachBtn = document.getElementById('btn-copy-coach');
+let reportBackTarget = '#/';
+let coachPromptText = '';
+
+document.getElementById('btn-report-back').addEventListener('click', () => navigate(reportBackTarget));
+copyCoachBtn.addEventListener('click', async () => {
+  if (!coachPromptText) return;
+  try {
+    await navigator.clipboard.writeText(coachPromptText);
+    toast('Coaching prompt copied — paste it into Claude for the qualitative analysis.');
+  } catch {
+    toast('Could not copy automatically — your browser blocked clipboard access.');
+  }
+});
+
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function fmtDur(sec) {
+  const m = Math.floor(sec / 60);
+  const s = Math.round(sec % 60);
+  return m ? `${m}m ${String(s).padStart(2, '0')}s` : `${s}s`;
+}
+
+function renderSessionList(scriptId) {
+  const sessions = listSessions(scriptId);
+  const script = getScript(scriptId);
+  reportBackTarget = '#/';
+  coachPromptText = '';
+  copyCoachBtn.hidden = true;
+  reportTitle.textContent = script ? (script.title || 'Untitled script') : 'Sessions';
+  reportSubtitle.textContent = sessions.length
+    ? `${sessions.length} recorded session${sessions.length > 1 ? 's' : ''}`
+    : 'No recorded sessions yet — present this script in voice mode for at least a minute.';
+  reportBody.textContent = '';
+  const grid = el('div', 'card-grid');
+  for (const s of sessions) {
+    const card = el('div', 'card');
+    card.append(
+      el('h3', '', new Date(s.startedAt).toLocaleString()),
+      el('p', 'meta', `${fmtDur(s.elapsedSec)} · ${s.words || 0} words spoken · reached ${Math.round(((s.finalPos + 1) / (s.tokensTotal || 1)) * 100)}% of script`),
+    );
+    const actions = el('div', 'card-actions');
+    const open = el('button', 'btn primary', 'Open report');
+    open.addEventListener('click', () => navigate('#/report/' + s.id));
+    const del = el('button', 'btn danger', 'Delete');
+    del.addEventListener('click', () => {
+      if (confirm('Delete this session report?')) {
+        deleteSession(s.id);
+        renderSessionList(scriptId);
+      }
+    });
+    actions.append(open, del);
+    card.append(actions);
+    grid.append(card);
+  }
+  reportBody.append(grid);
+}
+
+function renderReport(session) {
+  const scriptText = session.scriptText ?? getScript(session.scriptId)?.text ?? '';
+  const report = analyzeSession(session, scriptText);
+  reportBackTarget = '#/reports/' + session.scriptId;
+  coachPromptText = buildCoachPrompt(session, scriptText, report);
+  copyCoachBtn.hidden = false;
+
+  reportTitle.textContent = session.scriptTitle || 'Session report';
+  reportSubtitle.textContent =
+    `${new Date(session.startedAt).toLocaleString()} · ${fmtDur(report.durationSec)}`;
+  reportBody.textContent = '';
+
+  // headline stats
+  const chips = el('div', 'stat-row');
+  const stat = (value, label) => {
+    const c = el('div', 'stat-chip');
+    c.append(el('div', 'stat-value', String(value)), el('div', 'stat-label', label));
+    return c;
+  };
+  chips.append(
+    stat(fmtDur(report.durationSec), 'duration'),
+    stat(report.totalSpoken, 'words spoken'),
+    stat(report.avgWpm ?? '—', 'avg wpm'),
+    stat(report.coverage + '%', 'script covered'),
+    stat(report.pauseCount, 'pauses'),
+    stat(report.fumbles.length, 'fumbles'),
+    stat(report.offScript, 'off-script moments'),
+  );
+  reportBody.append(chips);
+
+  const section = (title, hint) => {
+    const card = el('div', 'card report-section');
+    card.append(el('h3', '', title));
+    if (hint) card.append(el('p', 'meta', hint));
+    reportBody.append(card);
+    return card;
+  };
+
+  // pace sparkline
+  if (report.pace.length > 1) {
+    const card = section('Pace, minute by minute', 'words read from the script per minute');
+    const max = Math.max(...report.pace, 1);
+    const w = 16;
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', `0 0 ${report.pace.length * w} 64`);
+    svg.setAttribute('class', 'pace-chart');
+    report.pace.forEach((v, i) => {
+      const h = Math.max(2, (v / max) * 56);
+      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      rect.setAttribute('x', i * w + 2);
+      rect.setAttribute('y', 60 - h);
+      rect.setAttribute('width', w - 4);
+      rect.setAttribute('height', h);
+      rect.setAttribute('rx', 2);
+      rect.setAttribute('class', 'pace-bar');
+      const t = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+      t.textContent = `min ${i + 1}: ${v} words`;
+      rect.append(t);
+      svg.append(rect);
+    });
+    card.append(svg);
+  }
+
+  if (report.topPauses.length) {
+    const card = section('Longest pauses', 'where you stopped — silence over 2.5 seconds');
+    const list = el('ul', 'report-list');
+    for (const p of report.topPauses) {
+      const li = el('li');
+      li.append(
+        el('strong', '', (p.durMs / 1000).toFixed(1) + 's'),
+        el('span', 'meta', ` at ${fmtTime(p.t / 1000)} — `),
+        el('em', '', `“${p.context}”`),
+      );
+      list.append(li);
+    }
+    card.append(list);
+  }
+
+  if (report.fumbles.length) {
+    const card = section('Fumble hotspots', 'places you went back or retook a line');
+    const list = el('ul', 'report-list');
+    for (const f of report.fumbles) {
+      const li = el('li');
+      li.append(
+        el('em', '', `“${f.context}”`),
+        el('span', 'meta', ` — ${f.count} ${f.count > 1 ? 'rewinds' : 'rewind'}${f.retake ? ' (retake)' : ''} around ${fmtTime(f.t / 1000)}`),
+      );
+      list.append(li);
+    }
+    card.append(list);
+  }
+
+  if (report.fillers.length || report.overused.length) {
+    const card = section('Words you lean on', 'spoken far more than the script asks for');
+    const wrap = el('div', 'chip-wrap');
+    for (const w2 of [...report.fillers, ...report.overused.filter(
+      (o) => !report.fillers.some((f) => f.word === o.word))]) {
+      wrap.append(el('span', 'word-chip', `${w2.word} ×${w2.spoken}`));
+    }
+    card.append(wrap);
+  }
+
+  if (report.skipped.length) {
+    const card = section('Skipped passages', 'script text the prompter never heard you read');
+    const list = el('ul', 'report-list');
+    for (const s of report.skipped) {
+      list.append(el('li', '', `“${s.context}” (${s.words} words)`));
+    }
+    card.append(list);
+  }
+
+  if (!report.topPauses.length && !report.fumbles.length &&
+      !report.fillers.length && !report.overused.length && !report.skipped.length) {
+    section('Clean take 🎉', 'No long pauses, fumbles, or crutch words detected. Copy the AI coaching prompt for deeper qualitative feedback.');
+  }
+
+  const hint = el('p', 'meta coach-hint',
+    '✦ “Copy AI coaching prompt” bundles your script, what you actually said, and these stats into a prompt for Claude — it answers the qualitative questions: which sentences didn’t land, why the fumbles happened, and what to change for the next take.');
+  reportBody.append(hint);
+}
 
 // ---------- editor ----------
 
