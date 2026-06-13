@@ -61,9 +61,12 @@ Teleprompt Pro is a PWA — it installs like a real app, no app store needed:
 
 ## Session reports 📊
 
-Read in voice mode for a minute or more and the session is recorded (locally,
-like everything else). Press **📊** in the prompter when you finish — or the
-**📊 n** button on the script's library card — to see:
+Read in voice mode for ~30 seconds or more and the session records itself
+(locally, like everything else). It **autosaves continuously** — every ~15
+seconds and whenever you pause, finish, exit, background the app, or close the
+tab — so a take is never lost even if you don't read all the way to the end.
+Press **📊** in the prompter, or the **📊 n** button on the script's library
+card, to see:
 
 - your longest **pauses**, with the exact script line you stopped at
 - **fumble hotspots** — where you rewound or retook lines

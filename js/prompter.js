@@ -32,6 +32,9 @@ export class Prompter {
       touchstart: () => this.wakeChrome(),
       wheel: () => this.onManualScroll(),
       touchmove: () => this.onManualScroll(),
+      // Persist the take if the tab is backgrounded or closed mid-session.
+      pagehide: () => this.recPersist(),
+      visibility: () => { if (document.visibilityState === 'hidden') this.recPersist(); },
     };
     this.wireControls();
   }
@@ -90,6 +93,8 @@ export class Prompter {
     this.root.addEventListener('touchstart', this.bound.touchstart, { passive: true });
     this.scrollEl.addEventListener('wheel', this.bound.wheel, { passive: true });
     this.scrollEl.addEventListener('touchmove', this.bound.touchmove, { passive: true });
+    window.addEventListener('pagehide', this.bound.pagehide);
+    document.addEventListener('visibilitychange', this.bound.visibility);
     this.wokeAt = 0;
     this.wakeChrome();
 
@@ -105,7 +110,7 @@ export class Prompter {
   }
 
   close() {
-    this.recSave();
+    this.recPersist();
     this.abortCountdown();
     if (this.engine) this.engine.stop();
     cancelAnimationFrame(this.rafId);
@@ -116,6 +121,8 @@ export class Prompter {
     this.root.removeEventListener('touchstart', this.bound.touchstart);
     this.scrollEl.removeEventListener('wheel', this.bound.wheel);
     this.scrollEl.removeEventListener('touchmove', this.bound.touchmove);
+    window.removeEventListener('pagehide', this.bound.pagehide);
+    document.removeEventListener('visibilitychange', this.bound.visibility);
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   }
 
@@ -218,25 +225,32 @@ export class Prompter {
       activity: [],  // timestamps of any recognition activity (pause detection)
       trace: [],     // {t, pos} accepted position moves
       marks: [],     // {t, type, ...} retakes, jumps, lost/relock, pause/resume
-      saved: false,
+      persisted: false,
+      persistFailed: false,
+      lastPersistAt: 0,
     };
+    this.lastSessionId = null;
+    this.$('#btn-report').hidden = true;
   }
 
   recT() {
-    return Math.round(performance.now() - this.rec.t0);
+    return this.rec ? Math.round(performance.now() - this.rec.t0) : 0;
   }
 
   recMark(type, extra = {}) {
-    if (this.rec && !this.rec.saved) this.rec.marks.push({ t: this.recT(), type, ...extra });
+    if (this.rec) this.rec.marks.push({ t: this.recT(), type, ...extra });
   }
 
-  // Persist the session if it represents a real take (>60s of voice reading).
-  recSave() {
+  // Checkpoint the current take to storage. Called continuously (autosave),
+  // on pause/finish/exit, AND when the tab is hidden or closing — so a session
+  // is never lost just because the reader closed the tab or switched apps.
+  // Uses an upsert keyed on rec.id, so repeated calls update one record.
+  recPersist() {
     const rec = this.rec;
-    if (!rec || rec.saved) return;
+    if (!rec) return;
     const elapsed = (performance.now() - rec.t0) / 1000;
-    if (elapsed < 60 || rec.trace.length < 5) return;
-    rec.saved = true;
+    if (elapsed < 30 || rec.trace.length < 5) return; // not a real take yet
+    rec.lastPersistAt = performance.now();
     const session = {
       id: rec.id,
       scriptId: rec.scriptId,
@@ -253,15 +267,22 @@ export class Prompter {
       marks: rec.marks,
     };
     if (saveSession(session)) {
+      const firstTime = !rec.persisted;
+      rec.persisted = true;
+      rec.persistFailed = false;
       this.lastSessionId = session.id;
-      const btn = this.$('#btn-report');
-      btn.hidden = false;
-      this.toast('Session saved — press 📊 Report for your delivery analysis.', 5000);
+      this.$('#btn-report').hidden = false;
+      if (firstTime) {
+        this.toast('Recording your session — press 📊 anytime for your delivery report.', 4500);
+      }
+    } else if (!rec.persistFailed) {
+      rec.persistFailed = true;
+      this.toast('Could not save this session — browser storage may be full. Free up space to keep your report.', 7000);
     }
   }
 
   onFinalWords(words) {
-    if (this.rec && !this.rec.saved && this.state === 'running') {
+    if (this.rec && this.state === 'running') {
       this.rec.heard.push({ t: this.recT(), w: words.join(' ') });
     }
   }
@@ -330,7 +351,7 @@ export class Prompter {
     this.startedAt = performance.now();
     if (fresh) this.elapsedBase = 0;
     if (this.mode === 'voice') {
-      if (fresh || !this.rec || this.rec.saved) this.recStart();
+      if (fresh || !this.rec) this.recStart();
       else this.recMark('resume');
       this.engine.start();
     } else {
@@ -355,7 +376,7 @@ export class Prompter {
   }
 
   restart() {
-    this.recSave(); // a restart ends the current take; keep its data
+    this.recPersist(); // a restart ends the current take; keep its data
     this.rec = null;
     this.abortCountdown();
     this.engine.stop();
@@ -384,7 +405,7 @@ export class Prompter {
     this.state = 'done';
     this.engine.stop();
     this.recMark('finish');
-    this.recSave();
+    this.recPersist();
     this.setStatus('done');
     this.updateStartBtn();
   }
@@ -431,7 +452,7 @@ export class Prompter {
       this.heardEl.textContent = words.slice(-7).join(' ');
     }
     const now = performance.now();
-    if (this.rec && !this.rec.saved) {
+    if (this.rec) {
       const t = this.recT();
       const acts = this.rec.activity;
       if (!acts.length || t - acts[acts.length - 1] >= 400) acts.push(t);
@@ -466,7 +487,7 @@ export class Prompter {
       this.lastMoveTarget = this.scrollTarget;
 
       this.paceLog.push({ t: now, pos: res.position });
-      if (this.rec && !this.rec.saved) this.rec.trace.push({ t: this.recT(), pos: res.position });
+      if (this.rec) this.rec.trace.push({ t: this.recT(), pos: res.position });
       if (res.position >= this.tokens.length - 1) this.finish();
     }
   }
@@ -523,6 +544,11 @@ export class Prompter {
     const e = this.elapsedSeconds();
     this.timerEl.textContent = fmtTime(e);
     if (this.state !== 'running' || this.mode !== 'voice') return;
+
+    // Autosave the take every ~15s so a crash or hard tab-close keeps it.
+    if (this.rec && performance.now() - (this.rec.lastPersistAt || 0) > 15000) {
+      this.recPersist();
+    }
 
     // Rolling words-per-minute over the last 45 seconds of progress.
     const now = performance.now();

@@ -110,6 +110,10 @@ export function getSession(id) {
 
 export function saveSession(session) {
   const sessions = listSessions();
+  // Upsert: a take is checkpointed repeatedly under one id, so replace any
+  // existing record rather than accumulating duplicates.
+  const existing = sessions.findIndex((s) => s.id === session.id);
+  if (existing >= 0) sessions.splice(existing, 1);
   sessions.unshift(session);
   while (sessions.length > MAX_SESSIONS) sessions.pop();
   if (write(SESSIONS_KEY, sessions)) return true;

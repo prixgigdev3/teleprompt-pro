@@ -3,7 +3,7 @@
 // (Voice tracking itself needs internet in Chrome — its recognition runs
 // server-side — but scripts, settings, and auto-scroll mode work offline.)
 
-const CACHE = 'teleprompt-pro-v3';
+const CACHE = 'teleprompt-pro-v4';
 const SHELL = [
   './',
   './index.html',
