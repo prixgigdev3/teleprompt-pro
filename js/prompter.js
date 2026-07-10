@@ -368,6 +368,7 @@ export class Prompter {
     this.state = 'paused';
     this.engine.stop();
     this.recMark('pause');
+    this.recPersist(); // checkpoint — pausing then walking away must not lose the take
     // Pause gaps would deflate the rolling WPM; start the estimate fresh.
     this.paceLog = [];
     this.remainEl.textContent = '';

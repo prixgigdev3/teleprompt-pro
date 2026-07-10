@@ -102,7 +102,7 @@ export class ScriptMatcher {
   feed(words) {
     const tail = words.map(normalizeWord).filter(Boolean).slice(-this.maxTail);
     if (!tail.length || !this.tokens.length) {
-      return { position: this.position, moved: false, matched: 0 };
+      return { position: this.position, moved: false, matched: 0, lost: false };
     }
 
     // When repeated feeds fail to match, progressively widen the search so a
