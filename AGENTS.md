@@ -24,7 +24,7 @@ post-session **delivery report** (pauses, fumbles, filler words, pace).
 2. **No dependencies.** `package.json` has zero `dependencies`/`devDependencies`.
    Do not add any. Everything is standard browser + Node built-ins.
 3. **Serve over HTTP, never `file://`.** The microphone (Web Speech API) requires
-   a secure/again context. Use `python3 server.py 8347` or the live HTTPS URL.
+   a secure context. Use `python3 server.py 8347` or the live HTTPS URL.
 4. **Run the tests after touching `js/matcher.js`, `js/speech.js`, or
    `js/analysis.js`:** `npm test`. These are the pure, unit-tested modules.
 5. **Bump the service-worker cache version** (`CACHE` in [sw.js](sw.js)) on every
@@ -32,9 +32,14 @@ post-session **delivery report** (pauses, fumbles, filler words, pace).
 6. **All user data is local-only.** Scripts, settings, and session recordings
    live in `localStorage` on the user's device and are **never** uploaded. Do not
    add analytics, telemetry, or any network call that exfiltrates script text.
-7. **Preserve the privacy + offline model.** The only network dependency is
+7. **Secrets:** this repo is **public** and the app has **no API keys** today.
+   Never commit real keys. Real values go only in git-ignored `.env.local`;
+   `.env.example` holds placeholders. See [SECRETS.md](SECRETS.md). Any future
+   paid API must use a user-supplied key (stored in the user's browser) or a
+   serverless proxy — never a key hard-coded in `js/`.
+8. **Preserve the privacy + offline model.** The only network dependency is
    Chrome's speech-recognition service (voice mode). Everything else works offline.
-8. **Match the existing style:** small, commented, dependency-free modules; the
+9. **Match the existing style:** small, commented, dependency-free modules; the
    comments explain *why*, not *what*. Keep that density.
 
 ---
@@ -84,6 +89,7 @@ tests/          node:test unit tests for matcher, speech, analysis
   matcher.test.js  speech.test.js  analysis.test.js
 
 AGENTS.md · ARCHITECTURE.md · CLAUDE.md · README.md   Docs
+SECRETS.md · .env.example      Secrets policy + key template (real keys → git-ignored .env.local)
 ```
 
 Load order: `index.html` → `<script type="module" src="js/app.js">`. `app.js`

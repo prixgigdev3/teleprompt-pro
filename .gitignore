@@ -1,1 +1,15 @@
+# macOS
 .DS_Store
+
+# ---------------------------------------------------------------------------
+# SECRETS — never commit real API keys or tokens to this PUBLIC repo.
+# Real values live in .env.local (and secrets/), which are ignored below.
+# Only .env.example (placeholders, no real values) is committed.
+# See SECRETS.md.
+# ---------------------------------------------------------------------------
+.env
+.env.local
+.env.*.local
+*.local.json
+secrets/
+!.env.example
