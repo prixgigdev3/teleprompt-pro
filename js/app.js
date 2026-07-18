@@ -6,7 +6,7 @@ import {
 } from './store.js';
 import { parseScript } from './matcher.js';
 import { Prompter, fmtTime } from './prompter.js';
-import { analyzeSession, buildCoachPrompt } from './analysis.js';
+import { analyzeSession, buildCoachPrompt, aggregateInsights } from './analysis.js';
 
 const views = {
   library: document.getElementById('view-library'),
@@ -49,8 +49,12 @@ function route() {
   const edit = hash.match(/^#\/edit\/(.+)$/);
   const reportList = hash.match(/^#\/reports\/(.+)$/);
   const reportOne = hash.match(/^#\/report\/(.+)$/);
+  const insights = hash.match(/^#\/insights$/);
 
-  if (reportList) {
+  if (insights) {
+    showView('report');
+    renderInsights();
+  } else if (reportList) {
     showView('report');
     renderSessionList(reportList[1]);
   } else if (reportOne) {
@@ -177,6 +181,8 @@ document.getElementById('btn-new-script').addEventListener('click', () => {
   navigate('#/edit/' + script.id);
 });
 
+document.getElementById('btn-insights').addEventListener('click', () => navigate('#/insights'));
+
 // ---------- session reports ----------
 
 const reportTitle = document.getElementById('report-title');
@@ -208,6 +214,83 @@ function fmtDur(sec) {
   const m = Math.floor(sec / 60);
   const s = Math.round(sec % 60);
   return m ? `${m}m ${String(s).padStart(2, '0')}s` : `${s}s`;
+}
+
+// Cross-session patterns: the spots you stop at and skip most, across all takes.
+function renderInsights() {
+  const sessions = listSessions();
+  const { totalSessions, scripts } = aggregateInsights(sessions);
+  reportBackTarget = '#/';
+  coachPromptText = '';
+  copyCoachBtn.hidden = true;
+  reportTitle.textContent = 'Insights across your recordings';
+  reportSubtitle.textContent = totalSessions
+    ? `${totalSessions} recorded session${totalSessions > 1 ? 's' : ''} across ${scripts.length} script${scripts.length > 1 ? 's' : ''}`
+    : 'No recorded sessions yet';
+  reportBody.textContent = '';
+
+  if (!totalSessions) {
+    const empty = el('div', 'card report-section');
+    empty.append(
+      el('h3', '', 'Nothing to analyze yet'),
+      el('p', 'meta', 'Present a script in voice mode for ~30 seconds or more, and your takes show up here. Then this page ranks the phrases you stop at and skip most across all of them.'),
+    );
+    reportBody.append(empty);
+    return;
+  }
+
+  const recur = (row) => row.takes > 1
+    ? `in ${row.takes} of your takes (${row.times}×)`
+    : `once`;
+
+  for (const s of scripts) {
+    const head = el('div', 'insight-script-head');
+    head.append(el('h2', '', s.scriptTitle));
+    head.append(el('span', 'meta', `${s.takes} take${s.takes > 1 ? 's' : ''}`));
+    reportBody.append(head);
+
+    // Stops
+    const stopCard = el('div', 'card report-section');
+    stopCard.append(
+      el('h3', '', '⏸ Where you stop the most'),
+      el('p', 'meta', 'longest pauses, grouped by the script line you stopped on'),
+    );
+    if (s.mostStoppedAt.length) {
+      const list = el('ol', 'report-list');
+      for (const r of s.mostStoppedAt) {
+        const li = el('li');
+        li.append(el('em', '', `“${r.context}”`));
+        const meta = el('span', 'meta',
+          ` — ${recur(r)}, ~${r.avgSec.toFixed(1)}s${r.maxSec > r.avgSec + 0.5 ? ` (up to ${r.maxSec.toFixed(1)}s)` : ''}`);
+        li.append(meta);
+        list.append(li);
+      }
+      stopCard.append(list);
+    } else {
+      stopCard.append(el('p', 'meta', 'No notable pauses — clean delivery. 🎉'));
+    }
+    reportBody.append(stopCard);
+
+    // Skips
+    const skipCard = el('div', 'card report-section');
+    skipCard.append(
+      el('h3', '', '⏭ What you skip the most'),
+      el('p', 'meta', 'script passages the prompter never heard you read'),
+    );
+    if (s.mostSkipped.length) {
+      const list = el('ol', 'report-list');
+      for (const r of s.mostSkipped) {
+        const li = el('li');
+        li.append(el('em', '', `“${r.context}”`));
+        li.append(el('span', 'meta', ` — ${recur(r)}, ~${r.words} words`));
+        list.append(li);
+      }
+      skipCard.append(list);
+    } else {
+      skipCard.append(el('p', 'meta', 'You covered the whole script every time. 🎯'));
+    }
+    reportBody.append(skipCard);
+  }
 }
 
 function renderSessionList(scriptId) {

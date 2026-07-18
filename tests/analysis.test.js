@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { analyzeSession, buildCoachPrompt } from '../js/analysis.js';
+import { analyzeSession, buildCoachPrompt, aggregateInsights } from '../js/analysis.js';
 
 const SCRIPT = `Welcome everyone to this special presentation about our product.
 
@@ -129,4 +129,38 @@ test('coach prompt contains script, transcript, and stats', () => {
   assert.ok(prompt.includes('basically'));               // transcript content
   assert.ok(prompt.includes('Longest pauses'));          // stats
   assert.ok(prompt.length < 200000);
+});
+
+test('aggregateInsights ranks recurring stops and skips across takes', () => {
+  // Three takes of the same script, each with the same pause + skip pattern.
+  const sessions = [0, 1, 2].map((i) => ({ ...makeSession(), id: 'r_take' + i, scriptId: 's_test' }));
+  const { totalSessions, scripts } = aggregateInsights(sessions);
+  assert.equal(totalSessions, 3);
+  assert.equal(scripts.length, 1);
+  const s = scripts[0];
+  assert.equal(s.takes, 3);
+  assert.ok(s.mostStoppedAt.length >= 1, 'expected an aggregated stop');
+  assert.equal(s.mostStoppedAt[0].takes, 3, 'recurring stop should count all 3 takes');
+  assert.ok(s.mostStoppedAt[0].avgSec >= 5);
+  assert.ok(s.mostSkipped.length >= 1, 'expected an aggregated skip');
+  assert.equal(s.mostSkipped[0].takes, 3, 'recurring skip should count all 3 takes');
+});
+
+test('aggregateInsights groups by script and sorts by take count', () => {
+  const sessions = [
+    { ...makeSession(), id: 'a1', scriptId: 'sA', scriptTitle: 'A' },
+    { ...makeSession(), id: 'a2', scriptId: 'sA', scriptTitle: 'A' },
+    { ...makeSession(), id: 'b1', scriptId: 'sB', scriptTitle: 'B' },
+  ];
+  const { scripts } = aggregateInsights(sessions);
+  assert.equal(scripts.length, 2);
+  assert.equal(scripts[0].scriptId, 'sA'); // more takes first
+  assert.equal(scripts[0].takes, 2);
+});
+
+test('aggregateInsights handles empty input', () => {
+  const r = aggregateInsights([]);
+  assert.equal(r.totalSessions, 0);
+  assert.deepEqual(r.scripts, []);
+  assert.doesNotThrow(() => aggregateInsights(undefined));
 });

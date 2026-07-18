@@ -13,3 +13,7 @@
 *.local.json
 secrets/
 !.env.example
+
+# local test artifacts
+.playwright-mcp/
+*.jpeg

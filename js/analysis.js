@@ -266,3 +266,67 @@ ${scriptText}
 === WHAT I ACTUALLY SAID (speech-to-text) ===
 ${transcript}`;
 }
+
+// Collapse a context snippet to a stable key so the same spot across different
+// takes aggregates together (ignores the leading/trailing "…", punctuation, case).
+function locationKey(context) {
+  return String(context).toLowerCase().replace(/[^\p{L}\p{N} ]+/gu, ' ').replace(/\s+/g, ' ').trim();
+}
+
+// Aggregate MANY recorded sessions into cross-take patterns: which script spots
+// the reader stops at most, and which passages they skip most. Grouped by
+// script, ranked by how many distinct takes each spot recurs in.
+export function aggregateInsights(sessions) {
+  const byScript = new Map();
+  for (const s of sessions || []) {
+    if (!byScript.has(s.scriptId)) byScript.set(s.scriptId, []);
+    byScript.get(s.scriptId).push(s);
+  }
+
+  const scripts = [];
+  for (const [scriptId, group] of byScript) {
+    const stops = new Map();   // key -> { context, takes:Set, times, totalMs, maxMs }
+    const skips = new Map();   // key -> { context, takes:Set, times, words }
+
+    for (const session of group) {
+      const report = analyzeSession(session, session.scriptText);
+      for (const p of report.topPauses) {
+        const key = locationKey(p.context);
+        if (!key) continue;
+        const e = stops.get(key) || { context: p.context, takes: new Set(), times: 0, totalMs: 0, maxMs: 0 };
+        e.times++; e.takes.add(session.id); e.totalMs += p.durMs; e.maxMs = Math.max(e.maxMs, p.durMs);
+        if (p.context.length > e.context.length) e.context = p.context;
+        stops.set(key, e);
+      }
+      for (const sk of report.skipped) {
+        const key = locationKey(sk.context);
+        if (!key) continue;
+        const e = skips.get(key) || { context: sk.context, takes: new Set(), times: 0, words: 0 };
+        e.times++; e.takes.add(session.id); e.words = Math.max(e.words, sk.words);
+        if (sk.context.length > e.context.length) e.context = sk.context;
+        skips.set(key, e);
+      }
+    }
+
+    const mostStoppedAt = [...stops.values()]
+      .map((e) => ({ context: e.context, takes: e.takes.size, times: e.times,
+        avgSec: (e.totalMs / e.times) / 1000, maxSec: e.maxMs / 1000 }))
+      .sort((a, b) => b.takes - a.takes || b.times - a.times || b.maxSec - a.maxSec)
+      .slice(0, 12);
+    const mostSkipped = [...skips.values()]
+      .map((e) => ({ context: e.context, takes: e.takes.size, times: e.times, words: e.words }))
+      .sort((a, b) => b.takes - a.takes || b.times - a.times || b.words - a.words)
+      .slice(0, 12);
+
+    scripts.push({
+      scriptId,
+      scriptTitle: group[0].scriptTitle || 'Untitled script',
+      takes: group.length,
+      mostStoppedAt,
+      mostSkipped,
+    });
+  }
+
+  scripts.sort((a, b) => b.takes - a.takes);
+  return { totalSessions: (sessions || []).length, scripts };
+}
